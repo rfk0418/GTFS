@@ -1,4 +1,3 @@
-<script>
 async function loadData() {
   const resp = await fetch("Santiago/santiago_metro.json");
   return await resp.json();
@@ -125,4 +124,3 @@ async function main() {
 }
 
 main();
-</script>
