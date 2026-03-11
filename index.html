@@ -2,75 +2,118 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Metro Trip Simulation</title>
+<title>Santiago Metro Random Trips</title>
 <style>
   body { font-family: sans-serif; padding: 20px; }
-  .trip { margin-bottom: 10px; }
+  h1 { margin-bottom: 10px; }
+  .trip { margin-bottom: 15px; }
 </style>
 </head>
 <body>
-
-<h1>Random Metro Trip Simulations</h1>
-<div id="trip-container"></div>
-<p id="avg-wait"></p>
+<h1>Random Santiago Metro Trips</h1>
+<div id="trips"></div>
+<p id="average-wait"></p>
 
 <script>
-// Load the JSON file
-fetch('Santiago/santiago_departures_with_names.json') // your JSON with stop names
-  .then(response => response.json())
-  .then(data => {
+// --- Load JSON (assuming it's in the same folder) ---
+async function loadMetroData() {
+    const response = await fetch("santiago_metro.json");
+    const data = await response.json();
+    return data;
+}
 
-    // Convert stop_departures JSON to a list of stops with names
-    const stops = Object.keys(data); // stop IDs
-    const stopNames = {}; // stop_id -> station_name
-    stops.forEach(id => stopNames[id] = data[id].name); // assuming JSON is { stop_id: {name:..., departures:[...]} }
+// --- Helper to convert minutes to hh:mm AM/PM ---
+function formatTime(mins) {
+    let h = Math.floor(mins / 60);
+    let m = Math.floor(mins % 60);
+    let ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${m.toString().padStart(2,'0')} ${ampm}`;
+}
 
-    const NUM_TRIPS = 10;
-    let totalWait = 0;
+// --- Find earliest departure at or after current time ---
+function nextDeparture(stops, stopName, currentTime, line) {
+    const departures = stops[stopName] || [];
+    for (let dep of departures) {
+        if (dep >= currentTime) return dep;
+    }
+    return departures[0]; // wrap around if no later departure
+}
 
-    const container = document.getElementById("trip-container");
+// --- Simulate a trip from start to end, allowing 1 transfer ---
+function simulateTrip(data) {
+    const stopNames = Object.keys(data.stops);
+    // Pick random start and end stops
+    let start = stopNames[Math.floor(Math.random()*stopNames.length)];
+    let end = stopNames[Math.floor(Math.random()*stopNames.length)];
+    while (end === start) end = stopNames[Math.floor(Math.random()*stopNames.length)];
 
-    for (let i = 0; i < NUM_TRIPS; i++) {
+    // Find lines for start and end
+    const startLines = data.stops[start];
+    const endLines = data.stops[end];
 
-      // Pick a random origin and destination
-      let origin = stops[Math.floor(Math.random() * stops.length)];
-      let dest;
-      do {
-        dest = stops[Math.floor(Math.random() * stops.length)];
-      } while (dest === origin);
-
-      // Pick a random arrival time in minutes from 5:00 to 23:00
-      let arrivalMin = 5*60 + Math.floor(Math.random() * (18*60));
-
-      // Find next departure at origin
-      let departures = data[origin].departures; // assuming array of minutes
-      let waitTime = departures.find(d => d >= arrivalMin) !== undefined
-                     ? departures.find(d => d >= arrivalMin) - arrivalMin
-                     : 0;
-
-      totalWait += waitTime;
-
-      // Convert minutes to hh:mm am/pm
-      let hours = Math.floor(arrivalMin / 60);
-      let minutes = Math.floor(arrivalMin % 60);
-      let ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12;
-      if (hours === 0) hours = 12;
-      let timeStr = `${hours}:${minutes.toString().padStart(2,'0')}${ampm}`;
-
-      // Create trip summary
-      const tripDiv = document.createElement("div");
-      tripDiv.className = "trip";
-      tripDiv.textContent = `Trip ${i+1}: Sunday, arrive ${timeStr}, ${stopNames[origin]} station travelling to ${stopNames[dest]} station, wait time ${Math.round(waitTime)} minutes`;
-      container.appendChild(tripDiv);
+    // Determine if transfer is needed
+    let line = startLines.find(l => endLines.includes(l)) || startLines[0];
+    let transferLine = null;
+    if (!endLines.includes(line)) {
+        transferLine = endLines[0]; // simple one transfer strategy
     }
 
-    const avg = totalWait / NUM_TRIPS;
-    document.getElementById("avg-wait").textContent = `Average wait time: ${avg.toFixed(1)} minutes`;
+    let currentTime = Math.floor(Math.random()*24*60); // random start minute
+    let totalWait = 0;
 
-  })
-  .catch(err => console.error(err));
+    let tripStops = [];
+    // First leg
+    let dep1 = nextDeparture(data.stops, start, currentTime, line);
+    let wait1 = (dep1 - currentTime + 1440) % 1440;
+    totalWait += wait1;
+    tripStops.push({ stop: start, line, dep: dep1, wait: wait1 });
+    currentTime = dep1 + 2; // assume 2 min between stops for simulation
+
+    // If transfer needed
+    if (transferLine) {
+        // Pick random transfer station
+        const transferStop = Object.keys(data.stops).find(s => data.stops[s].includes(line) && data.stops[s].includes(transferLine));
+        if (!transferStop) return simulateTrip(data); // retry if no transfer path
+        let depTransfer = nextDeparture(data.stops, transferStop, currentTime, transferLine);
+        let waitTransfer = (depTransfer - currentTime + 1440) % 1440;
+        totalWait += waitTransfer;
+        tripStops.push({ stop: transferStop, line: transferLine, dep: depTransfer, wait: waitTransfer });
+        currentTime = depTransfer + 2;
+    }
+
+    // End stop
+    let depEnd = nextDeparture(data.stops, end, currentTime, transferLine || line);
+    let waitEnd = (depEnd - currentTime + 1440) % 1440;
+    totalWait += waitEnd;
+    tripStops.push({ stop: end, line: transferLine || line, dep: depEnd, wait: waitEnd });
+    let totalTripTime = depEnd - tripStops[0].dep;
+
+    return { tripStops, totalWait, totalTripTime };
+}
+
+// --- Run 10 random trips ---
+async function runTrips() {
+    const data = await loadMetroData();
+    const container = document.getElementById("trips");
+    let totalWaitAll = 0;
+
+    for (let i=0;i<10;i++) {
+        const {tripStops, totalWait, totalTripTime} = simulateTrip(data);
+        totalWaitAll += totalWait;
+
+        const tripDiv = document.createElement("div");
+        tripDiv.className = "trip";
+        tripDiv.innerHTML = `<strong>Trip ${i+1}</strong>: Total trip time ${totalTripTime} min, Wait time ${totalWait} min<br>` +
+            tripStops.map(ts => `${ts.stop} (Line ${ts.line}) at ${formatTime(ts.dep)}, wait ${ts.wait} min`).join("<br>");
+        container.appendChild(tripDiv);
+    }
+
+    const avgWait = (totalWaitAll/10).toFixed(1);
+    document.getElementById("average-wait").textContent = `Average wait time: ${avgWait} minutes`;
+}
+
+runTrips();
 </script>
-
 </body>
 </html>
