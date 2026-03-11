@@ -101,20 +101,35 @@ function generateTrips(data, numTrips = 10) {
 }
 
 function displayTrips(trips) {
+
   const container = document.getElementById("trips");
   container.innerHTML = "";
+
   let totalWaitSum = 0;
+
   trips.forEach((trip,i)=>{
+
     totalWaitSum += trip.totalWait;
+
     const div = document.createElement("div");
     div.className = "trip";
-    div.innerHTML = `<strong>Trip ${i+1}:</strong> ${trip.start} (${trip.startLine}) → ${trip.end} (${trip.endLine})<br>
-      Arrival at start: ${trip.arrivalTime}, Wait at origin: ${trip.waitStart.toFixed(1)} min
-      ${trip.transfer ? `<br>Transfer at ${trip.transfer}, Wait: ${trip.waitTransfer.toFixed(1)} min` : ""}`;
+
+    div.innerHTML = `
+      <strong>Trip ${i+1}:</strong> 
+      ${trip.start} (${trip.startLine}) → ${trip.end} (${trip.endLine})<br>
+      Arrival at start: ${trip.arrivalTime}<br>
+      Wait at origin: ${trip.waitStart.toFixed(1)} minutes
+      ${trip.transfer ? `<br>Transfer at ${trip.transfer} (${trip.endLine}), Wait: ${trip.waitTransfer.toFixed(1)} minutes` : ""}
+    `;
+
     container.appendChild(div);
+
   });
+
   const avg = totalWaitSum / trips.length;
-  document.getElementById("avgWait").innerText = `Average wait time across trips: ${avg.toFixed(1)} minutes`;
+
+  document.getElementById("avgWait").innerText =
+    `Average wait time across trips: ${avg.toFixed(1)} minutes`;
 }
 
 async function main() {
