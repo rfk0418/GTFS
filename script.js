@@ -1,5 +1,5 @@
 async function loadData(){
-  const resp = await fetch("santiago_metro_simple.json");
+  const resp = await fetch("Santiago/santiago_metro_simple.json");
   return await resp.json();
 }
 
