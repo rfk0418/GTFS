@@ -1,16 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-  
-  <title>GTFS</title>
-  
+<meta charset="UTF-8">
+<title>Santiago Metro Wait Time Simulator</title>
+
+<style>
+body{
+  font-family: Arial;
+  padding:40px;
+}
+
+.trip{
+  border-bottom:1px solid #ccc;
+  padding:10px 0;
+}
+</style>
+
 </head>
 
 <body>
 
-<h1>GTFS</h1>
+<h1>Santiago Metro Random Wait Times</h1>
+
+<button onclick="main()">Generate Trips</button>
+
 <div id="trips"></div>
-  
+
+<h3 id="avg"></h3>
+
 <script src="script.js"></script>
 
 </body>
